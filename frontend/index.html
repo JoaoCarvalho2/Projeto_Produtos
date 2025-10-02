@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integração FileMaker-Jira</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Integração FileMaker para Jira</h1>
+            <p>Filtre, selecione e envie leads e propostas para o Jira.</p>
+        </header>
+
+        <main>
+            <div class="filters-card">
+                <h2>Filtros</h2>
+                <form id="filterForm">
+                    <div class="form-group">
+                        <label for="date_from">Data Início:</label>
+                        <input type="date" id="date_from" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="date_to">Data Fim:</label>
+                        <input type="date" id="date_to" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">Buscar (Apenas Atlassian)</button>
+                </form>
+            </div>
+
+            <div id="results" class="results-card" style="display: none;">
+                <div class="results-header">
+                    <h2>Resultados da Busca</h2>
+                    <div class="actions">
+                        <button id="exportCsv" class="btn btn-secondary">Exportar CSV</button>
+                        <button id="sendToJira" class="btn btn-success" disabled>Enviar Selecionados para Jira</button>
+                    </div>
+                </div>
+                 <div class="toolbar">
+                    <button id="selectAll">Selecionar Tudo</button>
+                    <button id="deselectAll">Desselecionar Tudo</button>
+                    <span id="counters"></span>
+                </div>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllHeader" /></th>
+                                <th>ID Lead</th>
+                                <th>ID Proposta</th>
+                                <th>Empresa</th>
+                                <th>Contato</th>
+                                <th>Data Criação</th>
+                                <th>Fabricante</th>
+                                <th>Valor</th>
+                                <th>Status Envio</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="loading" class="loading-spinner" style="display: none;"></div>
+            <div id="messageArea" class="message-area"></div>
+        </main>
+    </div>
+
+    <div id="confirmationModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-button">&times;</span>
+            <h2>Confirmar Envio</h2>
+            <p>Você está prestes a enviar <strong id="modalItemCount"></strong> item(ns) para o Jira. Deseja continuar?</p>
+            <div class="modal-actions">
+                <button id="cancelSend" class="btn btn-secondary">Cancelar</button>
+                <button id="confirmSend" class="btn btn-success">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
