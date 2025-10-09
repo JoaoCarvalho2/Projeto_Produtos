@@ -71,11 +71,10 @@ class FileMakerClient:
         try:
             date_from_obj = datetime.strptime(date_from, "%Y-%m-%d")
             date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
-            # Usando o formato de data que funcionou para você (MM/DD/YYYY)
             date_from_fm = date_from_obj.strftime("%m/%d/%Y")
             date_to_fm = date_to_obj.strftime("%m/%d/%Y")
             dates_for_fm = f"{date_from_fm}...{date_to_fm}"
-            
+                                                            #seleciona aqui o software(pensando em criar lista baseado nos valores do FM mas n sei fazer.)
             payload = {
                 "query": [{"data_criacao": dates_for_fm, "fabricante": "==Atlassian"}],
                 "limit": 1000
@@ -110,6 +109,7 @@ class FileMakerClient:
             proposta = self._get_latest_proposal_for_lead(str(lead_id))
             
             # Monta o resultado final com a proposta encontrada (ou com campos vazios se não houver)
+            #Tem que criar Issues no Jira como proposta talvez ver com o Rodrigo a necessidade. (Se necessário o payload terá que ser refeito)
             results.append({
                 "lead_id": str(lead_id),
                 "proposta_id": proposta.get("id") if proposta else None,
@@ -126,11 +126,7 @@ class FileMakerClient:
             
         query = [{proposal_link_field: f"=={lead_id}"}]
         
-        # =================================================================
-        # MUDANÇA PRINCIPAL: Adicionado 'sort' e 'limit'
-        # Pede para o FileMaker ordenar pelo campo "id" em ordem decrescente
-        # e retornar apenas 1 registro (o mais recente).
-        # =================================================================
+
         find_payload = {
             "query": query, 
             "limit": 1,
