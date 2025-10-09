@@ -3,7 +3,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let allData = [];
 
     const filterForm = document.getElementById('filterForm');
-    // const fabricanteSelect = document.getElementById('fabricante'); // Não usado
     const dateFromInput = document.getElementById('date_from');
     const dateToInput = document.getElementById('date_to');
     const resultsDiv = document.getElementById('results');
@@ -31,28 +30,6 @@ document.addEventListener('DOMContentLoaded', () => {
         messageArea.className = `message-area ${type}`;
         setTimeout(() => messageArea.textContent = '', 5000);
     }
-    
-    // A função abaixo não é mais chamada, mas pode ser reativada no futuro.
-    async function fetchFilters() {
-        try {
-            const response = await fetch(`${API_URL}/api/filters`);
-            if (!response.ok) throw new Error('Erro ao carregar filtros.');
-            const data = await response.json();
-            const fabricanteSelect = document.getElementById('fabricante');
-            fabricanteSelect.innerHTML = '<option value="">Todos</option>';
-            data.fabricantes.forEach(fab => {
-                const option = document.createElement('option');
-                option.value = fab;
-                option.textContent = fab;
-                fabricanteSelect.appendChild(option);
-            });
-        } catch (error) {
-            console.error(error);
-            showMessage('Não foi possível carregar os fabricantes.', 'error');
-        }
-    }
-
-// Em frontend/script.js, substitua a função existente por esta:
 
     function renderTable(data) {
         allData = data;
@@ -68,13 +45,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const row = document.createElement('tr');
             row.dataset.index = index;
             
-            // =====================================================================
-            // NOVA LÓGICA: Usa "||" para mostrar 'N/A' se o campo da proposta não existir
-            // =====================================================================
             row.innerHTML = `
                 <td><input type="checkbox" class="row-checkbox"></td>
                 <td>${item.lead_id || 'N/A'}</td>
-                <td>${item.proposta_fields['id'] || 'Sem Proposta'}</td>
+                <td>${item.proposta_id || 'Sem Proposta'}</td>
                 <td>${item.lead_fields.empresa || 'N/A'}</td>
                 <td>${item.lead_fields.nome || 'N/A'}</td>
                 <td>${item.lead_fields.data_criacao || 'N/A'}</td>
@@ -114,12 +88,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const csvContent = [
             headers.join(','),
             ...selectedRows.map(item => [
-                item.lead_id, item.proposta_id, `"${item.lead_fields.empresa || ''}"`,
-                `"${item.lead_fields.nome || ''}"`, item.lead_fields.data_criacao,
-                item.lead_fields['lead::fabricante'], item.proposta_fields['produto_proposta::valor_total_sum']
+                item.lead_id || '',
+                item.proposta_id || '',
+                `"${(item.lead_fields.empresa || '').replace(/"/g, '""')}"`,
+                `"${(item.lead_fields.nome || '').replace(/"/g, '""')}"`,
+                item.lead_fields.data_criacao || '',
+                // ========================================================
+                // CORREÇÃO: Usar 'fabricante' em vez de 'lead::fabricante'
+                // ========================================================
+                item.lead_fields.fabricante || '',
+                item.proposta_fields['produto_proposta::valor_total_sum'] || ''
             ].join(','))
         ].join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        
+        const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
@@ -134,24 +116,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedItems = [];
         document.querySelectorAll('.row-checkbox:checked').forEach(checkbox => {
             const rowIndex = checkbox.closest('tr').dataset.index;
-            if (rowIndex) {
+            if (rowIndex !== undefined) {
                 selectedItems.push(allData[parseInt(rowIndex)]);
             }
         });
         return selectedItems;
     }
 
-    // =====================================================================
-    // MUDANÇAS AQUI
-    // =====================================================================
-    
-    // A busca de filtros não é mais necessária no carregamento da página
-    // fetchFilters();
-
     filterForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        // A leitura do fabricante foi removida
-        // const fabricante = fabricanteSelect.value;
         const date_from = dateFromInput.value;
         const date_to = dateToInput.value;
 
@@ -164,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
         resultsDiv.style.display = 'none';
 
         try {
-            // O parâmetro 'fabricante' não é mais enviado na URL
             const params = new URLSearchParams({ date_from, date_to });
             const response = await fetch(`${API_URL}/api/leads?${params.toString()}`);
             if (!response.ok) {
@@ -182,7 +154,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Eventos de seleção (nenhuma mudança aqui)
     tableBody.addEventListener('change', (e) => {
         if (e.target.classList.contains('row-checkbox')) { handleSelection(); }
     });
@@ -201,7 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     exportCsvBtn.addEventListener('click', exportToCsv);
 
-    // Lógica do Modal e Envio para o Jira (nenhuma mudança aqui)
     sendToJiraBtn.addEventListener('click', () => {
         const selectedCount = getSelectedItems().length;
         if (selectedCount > 0) {
