@@ -28,9 +28,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# =================================================================
+# CORREÇÃO PRINCIPAL: Permitir que proposta_id seja nulo (Optional[str])
+# Isso corrige o erro 422 Unprocessable Content.
+# =================================================================
 class SendItem(BaseModel):
     lead_id: str
-    proposta_id: str
+    proposta_id: Optional[str] = None
     lead_fields: Dict
     proposta_fields: Dict
 
@@ -39,7 +43,7 @@ class SendPayload(BaseModel):
 
 class SendResult(BaseModel):
     lead_id: str
-    proposta_id: str
+    proposta_id: Optional[str] = None
     action: str
     issue_key: Optional[str] = None
     status: str
@@ -48,15 +52,16 @@ class SendResult(BaseModel):
 fm_client = FileMakerClient()
 jira_client = JiraClient()
 
+@app.get("/api/config", summary="Obter configurações do servidor")
+async def get_config():
+    return {"jira_base_url": os.getenv("JIRA_URL")}
+
 @app.get("/api/leads", summary="Buscar leads e propostas")
 async def search_leads(
     date_from: str = Query(..., description="Data de início no formato YYYY-MM-DD"),
     date_to: str = Query(..., description="Data de fim no formato YYYY-MM-DD")
 ):
     try:
-        # =====================================================================
-        # MUDANÇA: O filtro de fabricante foi removido.
-        # =====================================================================
         logging.info(f"Iniciando busca por data entre {date_from} e {date_to}.")
         leads_with_proposals = fm_client.get_leads_with_proposals(date_from, date_to)
         return leads_with_proposals
@@ -70,15 +75,18 @@ async def send_to_jira(payload: SendPayload):
     for item in payload.items:
         lead_id = item.lead_id
         try:
+            # Esta lógica de "atualizar se existir" já está correta e vai funcionar
+            # assim que o erro 422 for corrigido.
             existing_issue = jira_client.find_issue_by_lead_id(lead_id)
             if existing_issue:
                 action, issue_key, message = jira_client.update_issue(
                     existing_issue["key"], item.lead_fields, item.proposta_fields
                 )
             else:
-                action, issue_key, message = jira_client.create_issue(
+                action, issue_key, message = jira_client.create_and_update_issue(
                     item.lead_fields, item.proposta_fields
                 )
+            
             results.append(SendResult(
                 lead_id=lead_id, proposta_id=item.proposta_id, action=action,
                 issue_key=issue_key, status="ok" if action in ["created", "updated"] else "error", message=message

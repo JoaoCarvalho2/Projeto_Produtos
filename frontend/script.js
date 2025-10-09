@@ -1,7 +1,9 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const API_URL = 'http://127.0.0.1:8000';
     let allData = [];
+    let JIRA_BASE_URL = ''; // Variável para armazenar a URL do Jira
 
+    // Seleção de elementos do DOM
     const filterForm = document.getElementById('filterForm');
     const dateFromInput = document.getElementById('date_from');
     const dateToInput = document.getElementById('date_to');
@@ -20,6 +22,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelSendBtn = document.getElementById('cancelSend');
     const closeModalBtn = document.querySelector('.close-button');
 
+    // =================================================================
+    // NOVA FUNÇÃO: Buscar configurações do backend ao carregar a página
+    // =================================================================
+    async function fetchConfig() {
+        try {
+            const response = await fetch(`${API_URL}/api/config`);
+            if (!response.ok) {
+                console.error('Falha ao carregar configurações do servidor.');
+                return;
+            }
+            const config = await response.json();
+            JIRA_BASE_URL = config.jira_base_url;
+        } catch (error) {
+            console.error('Erro ao conectar com o backend para buscar configurações:', error);
+            showMessage('Não foi possível carregar as configurações do servidor. A funcionalidade pode ser limitada.', 'error');
+        }
+    }
+    
+    // Chama a função para buscar as configs assim que a página carrega
+    await fetchConfig();
+
+
     function toggleLoading(show) {
         loadingSpinner.style.display = show ? 'block' : 'none';
     }
@@ -29,6 +53,16 @@ document.addEventListener('DOMContentLoaded', () => {
         messageArea.textContent = message;
         messageArea.className = `message-area ${type}`;
         setTimeout(() => messageArea.textContent = '', 5000);
+    }
+    
+    function formatToBrazilianDate(dateString) {
+        if (!dateString || typeof dateString !== 'string') return 'N/A';
+        const parts = dateString.split('/');
+        if (parts.length === 3) {
+            const [month, day, year] = parts;
+            return `${day.padStart(2, '0')}/${month.padStart(2, '0')}/${year}`;
+        }
+        return dateString;
     }
 
     function renderTable(data) {
@@ -51,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${item.proposta_id || 'Sem Proposta'}</td>
                 <td>${item.lead_fields.empresa || 'N/A'}</td>
                 <td>${item.lead_fields.nome || 'N/A'}</td>
-                <td>${item.lead_fields.data_criacao || 'N/A'}</td>
+                <td>${formatToBrazilianDate(item.lead_fields.data_criacao)}</td>
                 <td>${item.lead_fields.fabricante || 'N/A'}</td>
                 <td>${item.proposta_fields['produto_proposta::valor_total_sum'] || 'N/A'}</td>
                 <td class="status-cell">
@@ -84,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showMessage('Selecione ao menos um item para exportar.', 'info');
             return;
         }
-        const headers = ['Lead ID', 'Proposta ID', 'Empresa', 'Contato', 'Data Criacao', 'Fabricante', 'Valor Total'];
+        const headers = ['Lead ID', 'Proposta ID', 'Empresa', 'Contato', 'Data Criacao (DD/MM/YYYY)', 'Fabricante', 'Valor Total'];
         const csvContent = [
             headers.join(','),
             ...selectedRows.map(item => [
@@ -92,10 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.proposta_id || '',
                 `"${(item.lead_fields.empresa || '').replace(/"/g, '""')}"`,
                 `"${(item.lead_fields.nome || '').replace(/"/g, '""')}"`,
-                item.lead_fields.data_criacao || '',
-                // ========================================================
-                // CORREÇÃO: Usar 'fabricante' em vez de 'lead::fabricante'
-                // ========================================================
+                formatToBrazilianDate(item.lead_fields.data_criacao),
                 item.lead_fields.fabricante || '',
                 item.proposta_fields['produto_proposta::valor_total_sum'] || ''
             ].join(','))
@@ -105,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.setAttribute('href', url);
-        link.setAttribute('download', 'export_leads.csv');
+        link.setAttribute('download', 'export_leads_atlassian.csv');
         link.style.visibility = 'hidden';
         document.body.appendChild(link);
         link.click();
@@ -201,16 +232,20 @@ document.addEventListener('DOMContentLoaded', () => {
             resultData.results.forEach(res => {
                 const row = Array.from(tableBody.querySelectorAll('tr')).find(r => {
                     const index = r.dataset.index;
-                    return allData[index] && allData[index].lead_id === res.lead_id && allData[index].proposta_id === res.proposta_id;
+                    return allData[index] && allData[index].lead_id === res.lead_id;
                 });
                 if (row) {
                     const statusCell = row.querySelector('.status-cell');
                     if (res.status === 'ok') {
                         row.classList.add('status-ok');
-                        statusCell.innerHTML = `<span class="status-message success">Sucesso! (${res.action})<br><b>${res.issue_key}</b></span>`;
+                        // =================================================================
+                        // CORREÇÃO: Usa a variável JIRA_BASE_URL para montar o link
+                        // =================================================================
+                        const issueLink = JIRA_BASE_URL ? `<a href="${JIRA_BASE_URL}/browse/${res.issue_key}" target="_blank"><b>${res.issue_key}</b></a>` : `<b>${res.issue_key}</b>`;
+                        statusCell.innerHTML = `<span class="status-message success">Sucesso! (${res.action})<br>${issueLink}</span>`;
                     } else {
                         row.classList.add('status-error');
-                        statusCell.innerHTML = `<span class="status-message error">Erro: ${res.message || 'Falha no envio.'}</span>`;
+                        statusCell.innerHTML = `<span class="status-message error" title="${res.message || 'Falha no envio.'}">Erro: Verifique o log</span>`;
                     }
                 }
             });
