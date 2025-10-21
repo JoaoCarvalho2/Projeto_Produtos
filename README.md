@@ -1,6 +1,6 @@
 # Integração FileMaker para Jira
 
-OBS(Para gerentes de produtos) Altera o ==Atlassian para seu prodotu respectivamente
+OBS(Para gerentes de produtos) Altere o ==Atlassian para seu produto respectivamente
 
 Este é um projeto de aplicação web full-stack (FastAPI + Vanilla JS) que serve como uma ferramenta de integração entre o FileMaker e o Jira.
 
