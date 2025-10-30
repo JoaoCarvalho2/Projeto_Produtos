@@ -11,36 +11,21 @@ from fm_client import FileMakerClient
 from jira_client import JiraClient
 
 load_dotenv()
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-app = FastAPI(
-    title="FileMaker to Jira Integrator API",
-    description="API para buscar dados no FileMaker e enviá-los para o Jira.",
-    version="1.0.0"
-)
+app = FastAPI(title="FileMaker to Jira Integrator API")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# =================================================================
-# CORREÇÃO PRINCIPAL: Permitir que proposta_id seja nulo (Optional[str])
-# Isso corrige o erro 422 Unprocessable Content.
-# =================================================================
 class SendItem(BaseModel):
     lead_id: str
     proposta_id: Optional[str] = None
     lead_fields: Dict
     proposta_fields: Dict
+    # NOVO: Adiciona os dados do portal ao modelo
+    proposta_portals: Dict
 
 class SendPayload(BaseModel):
     items: List[SendItem]
-
 class SendResult(BaseModel):
     lead_id: str
     proposta_id: Optional[str] = None
@@ -52,6 +37,7 @@ class SendResult(BaseModel):
 fm_client = FileMakerClient()
 jira_client = JiraClient()
 
+
 @app.get("/api/config", summary="Obter configurações do servidor")
 async def get_config():
     return {"jira_base_url": os.getenv("JIRA_URL")}
@@ -59,42 +45,41 @@ async def get_config():
 @app.get("/api/leads", summary="Buscar leads e propostas")
 async def search_leads(
     date_from: str = Query(..., description="Data de início no formato YYYY-MM-DD"),
-    date_to: str = Query(..., description="Data de fim no formato YYYY-MM-DD")
+    date_to: str = Query(..., description="Data de fim no formato YYYY-MM-DD"),
+    fornecedor: str = Query(..., description="Nome do fabricante/fornecedor")
 ):
     try:
-        logging.info(f"Iniciando busca por data entre {date_from} e {date_to}.")
-        leads_with_proposals = fm_client.get_leads_with_proposals(date_from, date_to)
-        return leads_with_proposals
+        return fm_client.get_leads_with_proposals(date_from, date_to, fornecedor)
     except Exception as e:
-        logging.error(f"Erro ao buscar leads: {e}")
         raise HTTPException(status_code=500, detail="Ocorreu um erro ao buscar dados no FileMaker.")
 
 @app.post("/api/send", response_model=Dict[str, List[SendResult]], summary="Enviar dados para o Jira")
 async def send_to_jira(payload: SendPayload):
+    """LÓGICA ATUALIZADA: Deletar issue existente antes de criar uma nova e adicionar comentários."""
     results = []
     for item in payload.items:
         lead_id = item.lead_id
         try:
-            # Esta lógica de "atualizar se existir" já está correta e vai funcionar
-            # assim que o erro 422 for corrigido.
+            # 1. Procura se a issue já existe
             existing_issue = jira_client.find_issue_by_lead_id(lead_id)
             if existing_issue:
-                action, issue_key, message = jira_client.update_issue(
-                    existing_issue["key"], item.lead_fields, item.proposta_fields
-                )
-            else:
-                action, issue_key, message = jira_client.create_and_update_issue(
-                    item.lead_fields, item.proposta_fields
-                )
+                # 2. Se existir, apaga a issue antiga
+                logging.info(f"Issue {existing_issue['key']} encontrada. Deletando para recriar...")
+                jira_client.delete_issue(existing_issue['key'])
+            
+            # 3. Cria uma nova issue, atualiza e adiciona comentários
+            action, issue_key, message = jira_client.create_and_update_issue(
+                item.lead_fields, item.proposta_fields, item.proposta_portals
+            )
             
             results.append(SendResult(
                 lead_id=lead_id, proposta_id=item.proposta_id, action=action,
-                issue_key=issue_key, status="ok" if action in ["created", "updated"] else "error", message=message
+                issue_key=issue_key, status="ok" if message is None else "error", message=message
             ))
         except Exception as e:
             logging.error(f"Erro inesperado ao processar lead {lead_id}: {e}")
             results.append(SendResult(
-                lead_id=lead_id, proposta_id=item.proposta_id, action="error",
+                lead_id=lead_id, proposta_id=item.proposta_id, action="fatal_error",
                 status="error", message=str(e)
             ))
     return {"results": results}

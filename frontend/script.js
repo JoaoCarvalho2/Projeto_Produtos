@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const dateFromInput = document.getElementById('date_from');
     const dateToInput = document.getElementById('date_to');
     const resultsDiv = document.getElementById('results');
+    const fornecedorSelect = document.getElementById('fornecedor');
     const tableBody = document.getElementById('resultsTableBody');
     const loadingSpinner = document.getElementById('loading');
     const countersSpan = document.getElementById('counters');
@@ -158,6 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         e.preventDefault();
         const date_from = dateFromInput.value;
         const date_to = dateToInput.value;
+        const fornecedor = fornecedorSelect.value;
 
         if (!date_from || !date_to) {
             showMessage('Por favor, preencha as datas de início e fim.', 'error');
@@ -168,7 +170,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         resultsDiv.style.display = 'none';
 
         try {
-            const params = new URLSearchParams({ date_from, date_to });
+            const params = new URLSearchParams({ date_from, date_to, fornecedor });
             const response = await fetch(`${API_URL}/api/leads?${params.toString()}`);
             if (!response.ok) {
                  const errorData = await response.json();
