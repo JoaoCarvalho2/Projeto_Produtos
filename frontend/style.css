@@ -36,7 +36,7 @@ h1 {
 
 .filters-card, .results-card {
     background: var(--card-background);
-    border-radius: 8px;
+    border-radius: 7px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     padding: 25px;
     margin-bottom: 25px;
@@ -199,3 +199,5 @@ tr.status-error { background-color: #ffebe6; }
         gap: 10px;
     }
 }
+
+
