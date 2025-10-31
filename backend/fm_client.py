@@ -4,7 +4,6 @@ import base64
 import logging
 import json
 from datetime import datetime
-# CORREÇÃO: Adicionado 'Tuple' à importação
 from typing import List, Dict, Any, Optional, Tuple
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
