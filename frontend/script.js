@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const API_URL = 'http://127.0.0.1:8000';
     let allData = [];
-    let JIRA_BASE_URL = ''; // Variável para armazenar a URL do Jira
+    let JIRA_BASE_URL = '';
 
     // Seleção de elementos do DOM
     const filterForm = document.getElementById('filterForm');
@@ -23,9 +23,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cancelSendBtn = document.getElementById('cancelSend');
     const closeModalBtn = document.querySelector('.close-button');
 
-    // =================================================================
-    // NOVA FUNÇÃO: Buscar configurações do backend ao carregar a página
-    // =================================================================
+
     async function fetchConfig() {
         try {
             const response = await fetch(`${API_URL}/api/config`);
@@ -98,6 +96,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         resultsDiv.style.display = 'block';
         updateCounters();
     }
+
+    
     
     function updateCounters() {
         const total = allData.length;
@@ -240,9 +240,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const statusCell = row.querySelector('.status-cell');
                     if (res.status === 'ok') {
                         row.classList.add('status-ok');
-                        // =================================================================
-                        // CORREÇÃO: Usa a variável JIRA_BASE_URL para montar o link
-                        // =================================================================
+
                         const issueLink = JIRA_BASE_URL ? `<a href="${JIRA_BASE_URL}/browse/${res.issue_key}" target="_blank"><b>${res.issue_key}</b></a>` : `<b>${res.issue_key}</b>`;
                         statusCell.innerHTML = `<span class="status-message success">Sucesso! (${res.action})<br>${issueLink}</span>`;
                     } else {

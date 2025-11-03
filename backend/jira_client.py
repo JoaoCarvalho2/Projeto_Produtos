@@ -18,6 +18,7 @@ class JiraClient:
         self.email = os.getenv("JIRA_EMAIL")
         self.api_token = os.getenv("JIRA_API_TOKEN")
         self.project_key = os.getenv("JIRA_PROJECT_KEY")
+        self.cliente_context_id = os.getenv("JIRA_CLIENTE_CONTEXT_ID", "10150")
         
         auth_str = f"{self.email}:{self.api_token}"
         auth_b64 = base64.b64encode(auth_str.encode()).decode()
@@ -38,94 +39,67 @@ class JiraClient:
         return None
 
     def find_issue_by_lead_id(self, lead_id: str) -> Optional[Dict[str, Any]]:
-
         jql = f'project = "{self.project_key}" AND customfield_10132 ~ "{lead_id}"'
         
-        # Este é o endpoint correto para buscas JQL via POST
         url = f"{self.base_url}/rest/api/3/search/jql" 
-
-        # Este é o payload que você testou e funcionou
         payload = json.dumps( {
             "jql": jql,
             "fields": [
                 "id",
                 "key",
-                "cf[10132]",
                 "customfield_10132",
-                "nº Lead[Short text]"
             ],
-            "fieldsByKeys": 'true', # Mantido como string, como no seu exemplo
-            "maxResults": 500, # Só precisamos encontrar uma, 5 é mais que suficiente
+            "fieldsByKeys": 'true',
+            "maxResults": 5, 
         } )
         
         logging.info(f"Buscando issue com Lead ID: {lead_id} (JQL: {jql})")
         
         try:
-            # A requisição POST correta
             response = requests.request(
                 "POST",
                 url,
-                data=payload,           # Use 'data' para o corpo do POST
-                headers=self.headers,   # Use os headers da classe (já contêm auth)
-                # Não precisa de 'auth=auth' (já está em self.headers)
-                # Não use 'params=payload' (incorreto)
+                data=payload,
+                headers=self.headers,
                 timeout=10
             )
-
-            # Lança um erro para respostas 4xx ou 5xx
             response.raise_for_status() 
-            
             data = response.json()
             
-            # O 'print' de debug que você tinha. Pode ser removido se não for necessário.
             print(json.dumps(data, sort_keys=True, indent=4, separators=(",", ": ")))
 
-            # A API /search/jql (POST) retorna o campo "total"
             if data.get("issues") and len(data["issues"]) >= 1:
-                # Pega a primeira issue da lista
                 issue_data = data["issues"][0] 
                 logging.info(f"Issue encontrada para Lead ID {lead_id}: {issue_data['key']}")
                 return issue_data
             
-            # Se a lista "issues" não existir ou estiver vazia, executa isso:
             logging.info(f"Nenhuma issue encontrada para Lead ID {lead_id}.")
             return None
             
         except requests.exceptions.RequestException as e:
-            # O erro será capturado aqui
             logging.error(f"Erro ao buscar issue para Lead ID {lead_id}: {e}")
             if hasattr(e, 'response') and e.response is not None:
                 logging.error(f"Detalhe do erro (Response): {e.response.status_code} - {e.response.text}")
             return None
 
     def delete_issue(self, issue_key: str) -> bool:
-            url = f"{self.base_url}/rest/api/3/issue/{issue_key}"
-            
-            # [NOVO] Log da tentativa de deleção
-            logging.info(f"Tentando apagar issue: {issue_key} (URL: {url})")
-            
-            try:
-                response = requests.delete(url, headers=self.headers, timeout=15)
-                
-                if response.status_code == 204:
-                    # Este log já existia e está ótimo! (Adicionei o 'Resultado' para clareza)
-                    logging.info(f"Issue {issue_key} apagada com sucesso. (Resultado: True)")
-                    return True
-                    
-                # Este log já existia e está ótimo! (Adicionei o 'Resultado' para clareza)
-                logging.error(f"Falha ao apagar issue {issue_key}: {response.status_code}, {response.text} (Resultado: False)")
-                return False
-                
-            except requests.exceptions.RequestException as e:
-                # Este log já existia e está ótimo! (Adicionei o 'Resultado' para clareza)
-                logging.error(f"Exceção ao apagar issue {issue_key}: {e} (Resultado: False)")
-                return False
+        url = f"{self.base_url}/rest/api/3/issue/{issue_key}"
+        logging.info(f"Tentando apagar issue: {issue_key} (URL: {url})")
+        try:
+            response = requests.delete(url, headers=self.headers, timeout=15)
+            if response.status_code == 204:
+                logging.info(f"Issue {issue_key} apagada com sucesso. (Resultado: True)")
+                return True
+            logging.error(f"Falha ao apagar issue {issue_key}: {response.status_code}, {response.text} (Resultado: False)")
+            return False
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Exceção ao apagar issue {issue_key}: {e} (Resultado: False)")
+            return False
 
     def add_comment(self, issue_key: str, content_nodes: List[Dict]) -> bool:
-        """ATUALIZADO: Adiciona um comentário a uma issue usando o formato ADF."""
+        """Adiciona um comentário a uma issue usando o formato ADF."""
         if not content_nodes: return True
         url = f"{self.base_url}/rest/api/3/issue/{issue_key}/comment"
-        # Payload agora usa a estrutura de documento do Atlassian (ADF)
         payload = {"body": {"type": "doc", "version": 1, "content": content_nodes}}
         try:
             response = requests.post(url, headers=self.headers, json=payload, timeout=15)
@@ -139,14 +113,13 @@ class JiraClient:
             return False
 
     def _format_comment_from_portals(self, portals: Dict) -> List[Dict]:
-        """REESCRITO: Formata os dados dos portais em uma estrutura de documento ADF para o Jira."""
+        """Formata os dados dos portais em uma estrutura de documento ADF para o Jira."""
         content_nodes = []
         
         # Formata produtos
         produtos = portals.get("produto_proposta", [])
         if produtos:
             content_nodes.append({"type": "heading", "attrs": {"level": 2}, "content": [{"type": "text", "text": "Produtos da Proposta"}]})
-            
             product_list_items = []
             total_proposta = 0.0
             for p in produtos:
@@ -156,7 +129,7 @@ class JiraClient:
                     valor = float(valor_str)
                     total_proposta += valor
                 except (ValueError, TypeError): 
-                    valor = valor_str # Mantem como texto se não for número
+                    valor = valor_str
                 
                 product_list_items.append({
                     "type": "listItem",
@@ -185,7 +158,6 @@ class JiraClient:
         return content_nodes
 
     def _map_fields(self, lead_fields: Dict, proposta_fields: Dict) -> Dict:
-        # ... (sem alterações)
         fields_update = {}
         fd=lead_fields; fp=proposta_fields
         if fd.get("id"): fields_update["customfield_10132"] = str(fd["id"])
@@ -210,17 +182,84 @@ class JiraClient:
         if fp.get("previsao_fechamento"): fields_update["duedate"] = self._format_date(fp["previsao_fechamento"])
         if fp.get("data_follow_up"): fields_update["customfield_10537"] = self._format_date(fp["data_follow_up"])
         if fd.get("lead::modo_licenciamento"): fields_update["customfield_10147"] = fd["lead::modo_licenciamento"]
-        if fp.get("lead.proposta::produto"): fields_update["customfield_10804"] = { "value": str(fp["lead.proposta::produto"]) }
+        
         log_data = fp.get("produto_proposta::LogData")
         if log_data:
             match = re.search(r"\[id_cotacao\].*?-\»\s*(\d+)", log_data)
             if match:
                 try: fields_update["customfield_10150"] = int(match.group(1))
                 except (ValueError, TypeError): pass
+        
+        logging.info(fields_update)        
         return fields_update
+    
+    
+    def _ensure_custom_field_option(self, field_key: str, context_id: str, option_value: str) -> bool:
+        """
+        Garante que uma opção de valor exista em um campo de lista (select-list).
+        Se não existir, tenta criá-la.
+        """
+        if not option_value:
+            return True
+
+        base_option_url = f"{self.base_url}/rest/api/3/field/{field_key}/context/{context_id}/option"
+        
+        # --- 1. TENTATIVA DE BUSCA ---
+        try:
+            params = {"query": option_value, "startAt": 0, "maxResults": 25}
+            response = requests.get(base_option_url, headers=self.headers, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            for option in data.get("values", []):
+                if option.get("value") == option_value:
+                    logging.info(f"Opção '{option_value}' encontrada para o campo {field_key} (via GET).")
+                    return True
+        except requests.exceptions.RequestException as e:
+            logging.warning(f"Não foi possível 'buscar' a opção '{option_value}' (Erro: {e}). Prosseguindo para 'criar'.")
+
+        # --- 2. TENTATIVA DE CRIAÇÃO ---
+        logging.info(f"Opção '{option_value}' não encontrada no campo {field_key} (contexto {context_id}). Criando...")
+        payload = {"options": [{"value": option_value}]}
+        
+        try:
+            create_response = requests.post(base_option_url, headers=self.headers, json=payload, timeout=15)
+
+            if create_response.status_code == 201:
+                logging.info(f"Opção '{option_value}' criada com sucesso (201 Created).")
+                return True
+            
+            if create_response.status_code == 200:
+                logging.warning(f"Opção '{option_value}' criada (200 OK). Tratando como sucesso.")
+                return True
+
+            create_response.raise_for_status()
+            
+            logging.error(f"Falha ao criar opção '{option_value}': {create_response.status_code} - {create_response.text}")
+            return False
+
+        except requests.exceptions.RequestException as e:
+            # --- 3. TRATAMENTO DE ERRO NA CRIAÇÃO ---
+            if e.response is not None:
+                if e.response.status_code == 400:
+                    try:
+                        error_data = e.response.json()
+                        if "errorMessages" in error_data and any("must be unique" in msg for msg in error_data["errorMessages"]):
+                            logging.warning(f"Falha ao criar '{option_value}' (400 - Duplicado), mas isso significa que a opção já existe. Tratando como SUCESSO.")
+                            return True
+                    except json.JSONDecodeError:
+                        pass
+                
+                logging.error(f"Erro (RequestException) ao 'criar' opção '{option_value}': {e}")
+                logging.error(f"Detalhe do erro (Response): {e.response.status_code} - {e.response.text}")
+                return False
+            
+            logging.error(f"Erro (sem resposta) ao 'criar' opção '{option_value}': {e}")
+            return False
+
 
     def create_and_update_issue(self, lead_fields: Dict, proposta_fields: Dict, proposta_portals: Dict) -> Tuple[str, Optional[str], Optional[str]]:
-        """ATUALIZADO: Controla o fluxo de criação, atualização e adição de comentário."""
+        """Controla o fluxo de criação, atualização e adição de comentário. (Obs precisa adicionar de forma mais bonita e os follow ups passados.)"""
         summary = lead_fields.get("empresa", f"Novo Lead - {lead_fields.get('id')}")
         lead_id = str(lead_fields.get("id"))
         create_payload = {"fields": {"project": {"key": self.project_key}, "issuetype": {"name": "Lead"}, "summary": summary, "customfield_10132": lead_id}}
@@ -249,17 +288,45 @@ class JiraClient:
             return "error", None, str(e)
 
     def update_issue(self, issue_key: str, lead_fields: Dict, proposta_fields: Dict, is_creation: bool = False) -> Tuple[str, Optional[str], Optional[str]]:
-        # ... (sem alterações)
         mapped_fields = self._map_fields(lead_fields, proposta_fields)
+        
+        if "customfield_10047" in mapped_fields:
+            try:
+                option_value_to_set = mapped_fields["customfield_10047"]["value"]
+                
+                if option_value_to_set and self.cliente_context_id:
+                    field_key = "customfield_10047" 
+                    
+                    success = self._ensure_custom_field_option(
+                        field_key,
+                        self.cliente_context_id, 
+                        option_value_to_set
+                    )
+                    
+                    if not success:
+                        err_msg = f"Falha ao garantir a opção de cliente '{option_value_to_set}'. A atualização da issue foi interrompida."
+                        logging.error(err_msg)
+                        return "error", issue_key, err_msg
+                
+                elif not self.cliente_context_id:
+                     logging.warning("JIRA_CLIENTE_CONTEXT_ID não está configurado. Não é possível garantir a opção 'Cliente'.")
+                     
+            except (KeyError, TypeError) as e:
+                logging.warning(f"Não foi possível extrair o valor de 'customfield_1D0047' para verificação: {e}")
+
         mapped_fields.pop("summary", None)
         mapped_fields.pop("customfield_10132", None)
+        
         payload = {"fields": mapped_fields}
         url = f"{self.base_url}/rest/api/3/issue/{issue_key}"
+        
         try:
             response = requests.put(url, headers=self.headers, json=payload, timeout=15)
             if response.status_code == 204:
                 action = "recreated" if is_creation else "updated"
                 return action, issue_key, None
+            
             return "error", issue_key, f"Erro {response.status_code}: {response.text}"
         except requests.exceptions.RequestException as e:
             return "error", issue_key, str(e)
+
