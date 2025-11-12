@@ -182,6 +182,24 @@ class JiraClient:
         if fp.get("previsao_fechamento"): fields_update["duedate"] = self._format_date(fp["previsao_fechamento"])
         if fp.get("data_follow_up"): fields_update["customfield_10537"] = self._format_date(fp["data_follow_up"])
         if fd.get("lead::modo_licenciamento"): fields_update["customfield_10147"] = fd["lead::modo_licenciamento"]
+        status_proposta = fp.get("probabilidade_conversao")
+        if status_proposta and isinstance(status_proposta, str) and status_proposta.endswith('%'):
+            try:
+               
+                numero_str = status_proposta.rstrip('%')
+                logging.info(f"Valor que está sendo enviado pro jira do status: {status_proposta}")
+                
+                if int(numero_str) == 20:
+                    fields_update["customfield_10771"] = {"id": "14888"} #lead = 14885
+                elif int(numero_str) == 40:
+                    fields_update["customfield_10771"] = {"id": "14885"} #pipeline = 14886
+                elif int(numero_str) == 60:
+                    fields_update["customfield_10771"] = {"id": "14887"} #forecast = 14887
+                elif int(numero_str) >= 80:
+                    fields_update["customfield_10771"] = {"id": "14886"} #novo = 14888
+            except (ValueError, TypeError):
+                
+                logging.warning(f"Valor em status_proposta não é um número válido: {status_proposta}")
         
         log_data = fp.get("produto_proposta::LogData")
         if log_data:
