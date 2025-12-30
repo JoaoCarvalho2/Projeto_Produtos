@@ -111,6 +111,18 @@ async def send_to_jira(payload: SendPayload):
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.normpath(os.path.join(APP_DIR, "..", "frontend"))
 
+@app.post("/api/sync-scheduled")
+async def sync_scheduled(
+    background_tasks: BackgroundTasks,
+    date_from: str = Query(...),
+    date_to: str = Query(...),
+    fornecedor: str = Query(...)
+):
+    # Agenda a tarefa para rodar "atrás das cortinas"
+    background_tasks.add_task(process_sync, date_from, date_to, fornecedor)
+    return {"status": "accepted", "message": f"Sincronizacao de {fornecedor} iniciada em background."}
+
+
 @app.get("/", response_class=FileResponse, include_in_schema=False)
 async def read_index():
     index_path = os.path.join(FRONTEND_DIR, 'index.html')
@@ -132,7 +144,7 @@ async def process_sync(date_from: str, date_to: str, fornecedor: str):
         logging.info(f"Sync iniciado: {fornecedor} de {date_from} ate {date_to}")
         # 1. Busca no FileMaker [cite: 1]
         leads = fm_client.get_leads_with_proposals(date_from, date_to, fornecedor)
-        
+
         if not leads:
             logging.info("Nenhum lead encontrado para este periodo.")
             return
@@ -140,7 +152,7 @@ async def process_sync(date_from: str, date_to: str, fornecedor: str):
         # 2. Prepara o payload para a mesma lógica do /api/send [cite: 2]
         items = [SendItem(**item) for item in leads]
         payload = SendPayload(items=items, fornecedor=fornecedor)
-        
+
         # 3. Chama a função de envio para o Jira [cite: 2]
         # Aqui você pode simplesmente chamar a lógica que já existe no seu post("/api/send")
         await send_to_jira(payload)
@@ -148,13 +160,4 @@ async def process_sync(date_from: str, date_to: str, fornecedor: str):
     except Exception as e:
         logging.error(f"Erro no processamento em background: {e}")
 
-@app.post("/api/sync-scheduled")
-async def sync_scheduled(
-    background_tasks: BackgroundTasks,
-    date_from: str = Query(...),
-    date_to: str = Query(...),
-    fornecedor: str = Query(...)
-):
-    # Agenda a tarefa para rodar "atrás das cortinas"
-    background_tasks.add_task(process_sync, date_from, date_to, fornecedor)
-    return {"status": "accepted", "message": f"Sincronizacao de {fornecedor} iniciada em background."}
+
