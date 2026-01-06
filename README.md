@@ -1,170 +1,209 @@
-# Integração FileMaker para Jira
+Integração FileMaker → Jira (Leads e Propostas)
 
-OBS(Para gerentes de produtos) Altere o ==Atlassian para seu produto respectivamente
+Este projeto é uma aplicação full stack (FastAPI + HTML/CSS/JS) criada para integrar Leads e Propostas do FileMaker com o Jira, permitindo que usuários filtrem registros por período e fornecedor, visualizem os dados em uma interface web e sincronizem tudo com o Jira de forma automatizada e confiável.
 
-Este é um projeto de aplicação web full-stack (FastAPI + Vanilla JS) que serve como uma ferramenta de integração entre o FileMaker e o Jira.
+O sistema foi projetado para evitar duplicidades, garantir consistência dos dados e enriquecer as issues do Jira com informações detalhadas de produtos e follow-ups vindas do FileMaker.
 
-A aplicação permite que usuários busquem por *Leads* e *Propostas* no FileMaker dentro de um intervalo de datas específico, selecionem os registros desejados em uma interface web e os enviem para o Jira. O backend processa cada item e, de forma inteligente, **cria** uma nova *Issue* no Jira ou **atualiza** uma *Issue* existente caso ela já tenha sido enviada anteriormente.
+🚀 Funcionalidades Principais
+🔎 Busca e Visualização
 
-## Funcionalidades Principais
+Filtro por intervalo de datas.
 
-* **Interface Web:** Frontend simples para filtrar Leads por data, visualizar e selecionar resultados.
-* **Busca no FileMaker:** Conecta-se à API de Dados do FileMaker para buscar *Leads* (filtrando pelo fabricante "Atlassian") e suas respectivas *Propostas* mais recentes.
-* **Sincronização Inteligente:** Para cada Lead enviado, o sistema primeiro verifica no Jira (usando um campo customizado para o ID do Lead) se uma *Issue* já existe.
-    * **Se existir:** Atualiza a *Issue* com os dados mais recentes do FileMaker.
-    * **Se não existir:** Cria uma nova *Issue* no projeto Jira configurado.
-* **Mapeamento de Dados:** Utiliza um arquivo de mapeamento (`mappings.py`) para converter valores de texto do FileMaker (como "Brasil", "Em Andamento", "Nome do Vendedor") para os IDs correspondentes nos campos customizados do Jira.
-* **Feedback em Tempo Real:** A interface web atualiza o status de cada item enviado, mostrando "Sucesso" (com um link direto para a *Issue* no Jira) ou "Erro".
-* **Exportação:** Permite exportar os itens selecionados para um arquivo CSV.
+Filtro dinâmico por fornecedor/fabricante (ex: Atlassian, AnyDesk, SonarQube).
 
-## Tech Stack
+Busca automática de:
 
-* **Backend:** [Python](https://www.python.org/) 3.8+
-    * [FastAPI](https://fastapi.tiangolo.com/): Para a criação da API REST.
-    * [Requests](https://requests.readthedocs.io/en/latest/): Para realizar chamadas às APIs do FileMaker e Jira.
-    * [python-dotenv](https://pypi.org/project/python-dotenv/): Para gerenciamento de variáveis de ambiente.
-* **Frontend:**
-    * HTML5
-    * CSS3 (Moderno, com variáveis)
-    * JavaScript (Vanilla JS, ES6+), usando `fetch` para chamadas de API.
-* **Servidor:**
-    * [Uvicorn](https://www.uvicorn.org/): Como servidor ASGI para o FastAPI.
+Leads no FileMaker.
 
-## Arquitetura e Fluxo de Dados
+Proposta mais recente associada a cada Lead.
 
-1.  **Usuário (Frontend):** O usuário abre o `index.html`, seleciona um intervalo de datas e clica em "Buscar".
-2.  **API (Backend):** O `script.js` chama o endpoint `GET /api/leads` no `app.py` (FastAPI).
-3.  **FileMaker (Backend):** O `app.py` usa o `fm_client.py` para:
-    a.  Autenticar e obter um token da API de Dados do FileMaker.
-    b.  Executar uma busca no layout de *Leads* (`FM_LAYOUT_LEAD`) pelo intervalo de datas e `fabricante == "Atlassian"`.
-    c.  Para cada *Lead* encontrado, executa uma segunda busca no layout de *Propostas* (`FM_LAYOUT_PROPOSTA`) para encontrar a proposta mais recente (ordenando por ID descendente).
-4.  **API (Backend):** O `app.py` formata os dados e os retorna como um JSON para o frontend.
-5.  **Usuário (Frontend):** O `script.js` recebe o JSON, renderiza a tabela de resultados e habilita o botão de envio.
-6.  **Usuário (Frontend):** O usuário seleciona os itens e clica em "Enviar Selecionados para Jira".
-7.  **API (Backend):** O `script.js` chama o endpoint `POST /api/send` com um *payload* contendo os dados dos itens selecionados.
-8.  **Jira (Backend):** Para cada item no *payload*, o `app.py` usa o `jira_client.py` para:
-    a.  Chamar `find_issue_by_lead_id()` para buscar no Jira por uma *Issue* que já tenha o ID do *Lead* (ex: `cf[10132] ~ "LEAD_ID"`).
-    b.  Mapear os campos do FileMaker para o formato do Jira usando o `_map_fields()` e os dicionários em `mappings.py`.
-    c.  Se a *Issue* for encontrada, chama `update_issue()` (requisição `PUT`).
-    d.  Se não for encontrada, chama `create_and_update_issue()` (requisição `POST` seguida de `PUT` para preencher todos os campos).
-9.  **API (Backend):** O `app.py` compila os resultados (sucesso/erro, *issue key*) e os retorna ao frontend.
-10. **Usuário (Frontend):** O `script.js` atualiza o status de cada linha da tabela, mostrando o link do Jira em caso de sucesso ou uma mensagem de erro.
+Visualização dos dados em tabela interativa no frontend.
 
-## Configuração e Instalação
+📤 Envio Inteligente para o Jira
 
-Para rodar este projeto, você precisa configurar as credenciais do FileMaker e do Jira, além de ajustar os mapeamentos de campos.
+Verificação automática de issues existentes no Jira pelo ID do Lead.
 
-### 1. Pré-requisitos
+Nova lógica de sincronização:
 
-* Python 3.8 ou superior.
-* Acesso à API de Dados do FileMaker com um usuário e senha.
-* Uma conta do Jira com permissão para criar/editar *Issues* e um Token de API.
-* Um projeto no Jira com os campos customizados necessários (para ID do Lead, Vendedor, País, etc.).
+Se a issue já existir → ela é deletada e recriada.
 
-### 2. Instalação
+Garante que o Jira sempre reflita o estado mais atual do FileMaker.
 
-1.  Clone este repositório:
-    ```bash
-    git clone <url-do-seu-repositorio>
-    cd <nome-do-repositorio>
-    ```
+Criação de issues do tipo Lead no projeto configurado.
 
-2.  Crie e ative um ambiente virtual (recomendado):
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # No Windows: venv\Scripts\activate
-    ```
+🧠 Mapeamento Avançado de Campos
 
-3.  Instale as dependências Python:
-    ```bash
-    pip install fastapi "uvicorn[standard]" requests python-dotenv
-    ```
-    *(Você pode querer criar um `requirements.txt` com esses pacotes)*
+Conversão de valores textuais do FileMaker para IDs de campos customizados do Jira.
 
-### 3. Variáveis de Ambiente (.env)
+Mapeamentos centralizados no arquivo mappings.py:
 
-Crie um arquivo chamado `.env` na raiz do projeto e preencha com as suas credenciais. Use o `jira_client.py` e `fm_client.py` como referência para todas as variáveis necessárias.
+Status
 
-```ini
-# --- Configuração do Jira ---
-JIRA_URL="[https://suaempresa.atlassian.net](https://suaempresa.atlassian.net)"
-JIRA_EMAIL="seu-email@dominio.com"
-JIRA_API_TOKEN="SeuTokenDeAPIDoJira"
-JIRA_PROJECT_KEY="PROJ"
+País
 
-# --- Configuração do FileMaker ---
-FM_HOST="fm.seuservidor.com"
-FM_DATABASE="NomeDoBanco"
-FM_USER="usuario_api"
-FM_PASSWORD="senha_api"
-FM_LAYOUT_LEAD="LayoutDeLeads"
-FM_LAYOUT_PROPOSTA="LayoutDePropostas"
-FM_PROPOSAL_LINK_FIELD="lead.proposta::id" # Campo que liga a proposta ao lead
+Categoria
 
-# (Opcional) Desabilitar verificação SSL (não recomendado para produção)
-# DISABLE_SSL_VERIFY="true"
-```
-4. Mapeamento de Campos (IMPORTANTE)
-O arquivo mappings.py traduz dados do FileMaker para os IDs do Jira. Os IDs no arquivo (10142, 16108, etc.) são específicos da sua instância do Jira.
+Vendedor
 
-Você DEVE atualizar este arquivo com os IDs corretos da sua instância:
+Criação automática de opções de campos select-list no Jira, caso não existam.
 
-status_map: Mapeia o status do Lead (ex: "Proposta") para o ID da Opção do campo no Jira.
+💬 Comentários Automáticos (Novo)
 
-pais_map: Mapeia o nome do país para o ID da Opção.
+Após criar a issue, o sistema adiciona comentários estruturados contendo:
 
-vendedor_map: Mapeia o nome do vendedor para o ID do Usuário ou Opção no Jira.
+📦 Produtos da proposta, com valores individuais.
 
-categoria_map: Mapeia a categoria para o ID da Opção.
+💰 Valor total da proposta.
 
-vendedor_email_map: Mapeia o nome do vendedor para o e-mail (usado em campos de usuário).
+📝 Follow-ups históricos, com data, usuário e descrição.
 
-Como encontrar os IDs no Jira:
+Comentários são enviados usando o formato ADF (Atlassian Document Format).
 
-Para campos de Opção (Select List): Vá em Configurações > Issues > Campos Customizados, encontre o campo, clique em "Contextos e valor padrão" (ou "Options") e inspecione os IDs.
+📊 Interface Web
 
-Para Usuários: O vendedor_map parece usar IDs de Opções (como um "Assistente de Vendas"), não de usuários. Verifique se o seu campo customfield_10146 é um campo de usuário ou de seleção.
+Seleção individual ou em massa de registros.
 
-5. IDs de Campos Customizados (IMPORTANTE)
-O arquivo jira_client.py possui IDs de campos customizados (ex: customfield_10132, customfield_10151) fixos no código, principalmente no método _map_fields.
+Contadores de itens selecionados.
 
-Você DEVE inspecionar o seu Jira e atualizar todos os customfield_XXXXX para que correspondam aos campos da sua instância.
+Exportação dos dados selecionados para CSV.
 
-Principalmente:
+Feedback visual em tempo real:
 
-cf[10132] em find_issue_by_lead_id(): Este é o campo que armazena o ID do Lead do FileMaker. Ele é crucial para a lógica de "atualizar vs. criar".
+✅ Sucesso (com link direto para a issue no Jira).
 
-Como Usar
-Iniciar o Backend: No seu terminal, com o ambiente virtual ativado, rode o Uvicorn:
+❌ Erro detalhado por item.
 
-uvicorn app:app --reload ou python -m uvicorn app:app
+🧱 Arquitetura do Projeto
+joaocarvalho2-projeto_produtos/
+├── README.md
+├── backend/
+│   ├── app.py              # API FastAPI e orquestração geral
+│   ├── fm_client.py        # Integração com FileMaker Data API
+│   ├── jira_client.py      # Integração completa com Jira REST API
+│   ├── mappings.py         # Mapeamento FileMaker → Jira
+│   └── requirements.txt
+└── frontend/
+    ├── index.html          # Interface web
+    ├── script.js           # Lógica frontend (fetch, UI, envios)
+    └── style.css           # Estilos
 
-O servidor estará rodando em http://127.0.0.1:8000.
+🛠️ Tech Stack
+Backend
 
-Abrir o Frontend: Abra o arquivo index.html diretamente no seu navegador (ex: clicando duas vezes nele).
+Python 3.8+
 
-Buscar Leads:
+FastAPI
 
-Selecione a "Data Início" e "Data Fim".
+Uvicorn
 
-Clique em "Buscar (Apenas Atlassian)".
+Requests
 
-A tabela será preenchida com os resultados.
+python-dotenv
 
-Enviar para o Jira:
+Frontend
 
-Marque os checkboxes dos itens que deseja enviar.
+HTML5
 
-Use "Selecionar Tudo" ou "Desselecionar Tudo" para facilitar.
+CSS3
 
-Clique no botão "Enviar Selecionados para Jira".
+JavaScript (Vanilla ES6+)
 
-Confirme o envio na janela modal.
+Integrações
 
-Verificar Resultados:
+FileMaker Data API
 
-Aguarde o processamento. A coluna "Status Envio" será atualizada.
+Jira REST API v3
 
-Sucesso: A linha ficará verde (.status-ok) e mostrará um link para a Issue criada/atualizada no Jira.
+🔄 Fluxo de Funcionamento
 
-Erro: A linha ficará vermelha (.status-error). Passe o mouse sobre a mensagem de erro para ver mais detalhes (se disponíveis).
+Usuário seleciona datas e fornecedor no frontend.
+
+Frontend chama GET /api/leads.
+
+Backend:
+
+Autentica no FileMaker.
+
+Busca Leads.
+
+Busca a proposta mais recente de cada Lead.
+
+Usuário seleciona os itens desejados.
+
+Frontend envia os dados via POST /api/send.
+
+Backend:
+
+Procura issue existente no Jira pelo ID do Lead.
+
+Se existir → deleta a issue.
+
+Cria uma nova issue.
+
+Atualiza campos customizados.
+
+Adiciona comentários com produtos e follow-ups.
+
+Frontend exibe o status final de cada item.
+
+⚙️ Configuração
+Pré-requisitos
+
+Python 3.8+
+
+Acesso à API do FileMaker
+
+Conta no Jira com permissões de criação/edição
+
+Token de API do Jira
+
+Campos customizados já criados no Jira
+
+Instalação
+git clone <url-do-repositorio>
+cd joaocarvalho2-projeto_produtos
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r backend/requirements.txt
+
+Variáveis de Ambiente (.env)
+# Jira
+JIRA_URL=https://suaempresa.atlassian.net
+JIRA_EMAIL=seu-email@empresa.com
+JIRA_API_TOKEN=seu_token
+JIRA_PROJECT_KEY=PROJ
+JIRA_CLIENTE_CONTEXT_ID=10150
+
+# FileMaker
+FM_HOST=servidor.fm.com
+FM_DATABASE=Banco
+FM_USER=usuario
+FM_PASSWORD=senha
+FM_LAYOUT_LEAD=LayoutLeads
+FM_LAYOUT_PROPOSTA=LayoutPropostas
+FM_PROPOSAL_LINK_FIELD=lead.proposta::id
+
+▶️ Como Executar
+Backend
+cd backend
+uvicorn app:app --reload
+
+
+API disponível em:
+http://127.0.0.1:8000
+
+Frontend
+
+Abra o arquivo frontend/index.html diretamente no navegador.
+
+📌 Observações Importantes
+
+Os IDs de customfield_XXXXX são específicos da instância do Jira.
+
+Revise e ajuste:
+
+mappings.py
+
+jira_client.py
+
+A lógica de delete + recreate foi adotada para evitar inconsistências históricas.
